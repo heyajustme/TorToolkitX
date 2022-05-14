@@ -7,6 +7,7 @@ import logging
 import os
 import time
 import traceback
+import aiohttp
 from datetime import datetime
 from functools import partial
 from random import randint
@@ -48,20 +49,31 @@ async def get_client(
     # try to connect to the server :)
     try:
         await aloop.run_in_executor(None, client.auth_log_in)
-        torlog.info("Client connected successfully to the torrent server. :)")
+        torlog.info("Client connected successfully to the torrent server. 😎")
+        try:
+            if get_val("ADD_CUSTOM_TRACKERS"):
+
+                url = get_val("TRACKER_SOURCE")
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url) as resp:
+                        tracker_data = await resp.text()
+            else:
+                tracker_data = ""
+        except:
+            tracker_data = ""
+
+        qbt_trackers_confirmation = get_val("ADD_CUSTOM_TRACKERS")
+
         await aloop.run_in_executor(
             None,
             client.application.set_preferences,
             {
-                "disk_cache": 20,
-                "incomplete_files_ext": True,
-                "max_connec": 3000,
-                "max_connec_per_torrent": 300,
-                "async_io_threads": 6,
+                "add_trackers_enabled":qbt_trackers_confirmation,
+                "add_trackers":tracker_data
             },
         )
         torlog.debug(
-            "Setting the cache size to 20 incomplete_files_ext:True,max_connec:3000,max_connec_per_torrent:300,async_io_threads:6"
+            "Setting the cache size to 64 incomplete_files_ext:True,max_connec:3000,max_connec_per_torrent:300,async_io_threads:6"
         )
         return client
     except qba.LoginFailed as e:
@@ -81,7 +93,7 @@ async def get_client(
                 port
             )
         )
-        cmd = f"qbittorrent-nox -d --webui-port={port}"
+        cmd = f"qbittorrent-nox -d --webui-port={port} --profile=."
         cmd = cmd.split(" ")
 
         subpr = await aio.create_subprocess_exec(
@@ -175,7 +187,7 @@ async def add_torrent_file(path, message):
 
         if len(ext_res) > 0:
             torlog.info(f"This torrent is in list {ext_res} {path} {ext_hash}")
-            await message.edit("This torrent is alreaded in the leech list.")
+            await message.edit("This torrent is already added in the leech list.")
             return False
 
         # hot fix for the below issue
@@ -666,7 +678,7 @@ async def get_confirm_callback(e, lis):
     raise events.StopPropagation()
 
 
-# quick asycn functions
+# quick async functions
 
 
 async def get_torrent_info(client, ehash=None):
